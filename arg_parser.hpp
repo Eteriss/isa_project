@@ -15,7 +15,6 @@ public:
     bool verbose = false;
 private:
     void parse_args(int argc, char* argv[]);
-    
 };
 
 #endif
