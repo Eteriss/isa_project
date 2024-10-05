@@ -26,7 +26,6 @@ std::string Section::parse_domain(const u_char *dnsPacket, const u_char *headerP
 {
     std::string domainName;
     int length = get_domain_length(dnsPacket);
-    int offset = 0;
     const u_char *currentPtr = dnsPacket;
 
     while (*currentPtr != 0)
@@ -34,7 +33,7 @@ std::string Section::parse_domain(const u_char *dnsPacket, const u_char *headerP
         // check if the domain name is compressed
         if ((*currentPtr & 0xC0) == 0xC0)
         {
-            offset = ((*currentPtr & 0x3F) << 8);
+            int offset = ((*currentPtr & 0x3F) << 8);
             currentPtr += 1;
             offset |= *currentPtr;
             currentPtr = headerPtr + offset;

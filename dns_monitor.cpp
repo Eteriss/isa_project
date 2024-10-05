@@ -188,21 +188,21 @@ void DnsMonitor::print_dns_packet(const struct udphdr *udpHeader, const u_char *
         {
             cout << endl
                  << "[Answer Section]" << endl;
-            nextSection = print_dns_answer(dnsPacket, anCount, nextSection);
+            nextSection = print_section(dnsPacket, anCount, nextSection);
         }
 
         if (nsCount > 0)
         {
             cout << endl
                  << "[Authority Section]" << endl;
-            nextSection = print_dns_authority(dnsPacket, nsCount, nextSection);
+            nextSection = print_section(dnsPacket, nsCount, nextSection);
         }
 
         if (arCount > 0)
         {
             cout << endl
                  << "[Additional Section]" << endl;
-            print_dns_additional(dnsPacket, arCount, nextSection);
+            print_section(dnsPacket, arCount, nextSection);
         }
 
         cout << "====================" << endl;
@@ -243,8 +243,8 @@ const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCoun
         string qTypeStr = qTypeMap[qtype];
         string qClassStr = qClassMap.count(qclass) ? qClassMap[qclass] : to_string(qclass);
 
-        if (qtype == 1 || qtype == 28)
-            add_to_translations(domain, qTypeStr);
+        // if (qtype == 1 || qtype == 28)
+        //     add_to_translations
 
         cout << domain << " " << qClassStr << " " << qTypeStr << endl;
     }
@@ -252,200 +252,109 @@ const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCoun
     return currentPtr;
 }
 
-const u_char *DnsMonitor::print_dns_answer(const u_char *headerPtr, int ancount, const u_char *startOfAnswer)
+const u_char *DnsMonitor::print_section(const u_char *headerPtr, int recordCount, const u_char *startOfSection)
 {
-    const u_char *recordPtr = startOfAnswer;
-    for (int i = 0; i < ancount; i++)
+    const u_char *recordPtr = startOfSection;
+    for (int i = 0; i < recordCount; i++)
     {
         Section answerSection(recordPtr, headerPtr, false);
-        uint16_t type = answerSection.type;
-        uint32_t ttl = answerSection.ttl;
-        uint16_t dataLen = answerSection.dataLen;
-        string domain = answerSection.domain;
-        add_to_domain_list(domain);
-
-        switch (type)
-        {
-        case 1:
-        { // A record
-            struct in_addr addr;
-            memcpy(&addr, answerSection.currentPtr, sizeof(struct in_addr));
-            cout << domain << " " << ttl << " " << "IN " << "A " << inet_ntoa(addr) << endl;
-            add_to_translations(domain, inet_ntoa(addr));
-            answerSection.currentPtr += dataLen;
-            break;
-        }
-        case 28:
-        { // AAAA record
-            char addr[INET6_ADDRSTRLEN];
-            inet_ntop(AF_INET6, answerSection.currentPtr, addr, sizeof(addr));
-            cout << domain << " " << ttl << " " << "IN " << "AAAA " << addr << endl;
-            add_to_translations(domain, addr);
-            answerSection.currentPtr += dataLen;
-            break;
-        }
-        case 2:
-        { // NS record
-            string nsName = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
-            cout << domain << " " << ttl << " " << "IN " << "NS " << nsName << endl;
-            add_to_domain_list(nsName);
-            break;
-        }
-        case 15:
-        { // MX record
-            uint16_t preference = ntohs(*(uint16_t *)answerSection.currentPtr);
-            answerSection.currentPtr += 2;
-            string exchange = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
-            if (exchange == "")
-                exchange = "<Root>";
-            cout << domain << " " << ttl << " " << "IN " << "MX " << preference << " " << exchange << endl;
-            break;
-        }
-        case 6:
-        { // SOA record
-            answerSection.currentPtr = print_soa_record(answerSection, headerPtr, domain, ttl);
-            break;
-        }
-        case 5:
-        { // CNAME record
-            string cname = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
-            cout << domain << " " << ttl << " " << "IN " << "CNAME " << cname << endl;
-            break;
-        }
-        case 33:
-        { // SRV record
-            uint16_t priority = ntohs(*(uint16_t *)answerSection.currentPtr);
-            answerSection.currentPtr += 2;
-            uint16_t weight = ntohs(*(uint16_t *)answerSection.currentPtr);
-            answerSection.currentPtr += 2;
-            uint16_t port = ntohs(*(uint16_t *)answerSection.currentPtr);
-            answerSection.currentPtr += 2;
-            string target = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
-            cout << domain << " " << ttl << " " << "IN " << "SRV " << priority << " " << weight << " " << port << " " << target << endl;
-            break;
-        }
-        default:
-            break;
-        }
-
-        recordPtr = answerSection.currentPtr;
+        recordPtr = print_record(answerSection, headerPtr);
     }
 
     return recordPtr;
 }
 
-const u_char *DnsMonitor::print_dns_authority(const u_char *headerPtr, int nscount, const u_char *startOfAuthority)
+const u_char *DnsMonitor::print_record(Section currentSection, const u_char *headerPtr)
 {
-    const u_char *recordPtr = startOfAuthority;
+    uint16_t type = currentSection.type;
+    uint32_t ttl = currentSection.ttl;
+    uint16_t dataLen = currentSection.dataLen;
+    string domain = currentSection.domain;
+    add_to_domain_list(domain);
 
-    for (int i = 0; i < nscount; i++)
+    switch (type)
     {
-        Section authSection(recordPtr, headerPtr, false);
-        uint16_t type = authSection.type;
-        uint32_t ttl = authSection.ttl;
-        string domain = authSection.domain;
-        add_to_domain_list(domain);
-
-        switch (type)
-        {
-        case 2:
-        { // NS record
-            string nsName = authSection.parse_domain(authSection.currentPtr, headerPtr);
-            cout << domain << " " << ttl << " " << "IN " << "NS " << nsName << endl;
-            break;
-        }
-        case 6:
-        { // SOA record
-            authSection.currentPtr = print_soa_record(authSection, headerPtr, domain, ttl);
-            break;
-        }
-        default:
-            break;
-        }
-
-        recordPtr = authSection.currentPtr;
+    case 1:
+    { // A record
+        struct in_addr addr;
+        memcpy(&addr, currentSection.currentPtr, sizeof(struct in_addr));
+        cout << domain << " " << ttl << " " << "IN " << "A " << inet_ntoa(addr) << endl;
+        add_to_translations(domain, inet_ntoa(addr));
+        currentSection.currentPtr += dataLen;
+        break;
     }
-
-    return recordPtr;
-}
-
-void DnsMonitor::print_dns_additional(const u_char *headerPtr, int arcount, const u_char *startOfAdditional)
-{
-    const u_char *recordPtr = startOfAdditional;
-
-    for (int i = 0; i < arcount; i++)
-    {
-        Section additionalSection(recordPtr, headerPtr, false);
-        uint16_t type = additionalSection.type;
-        uint32_t ttl = additionalSection.ttl;
-        uint16_t dataLen = additionalSection.dataLen;
-        string domain = additionalSection.domain;
-        add_to_domain_list(domain);
-
-        switch (type)
-        {
-        case 1:
-        { // A record
-            struct in_addr addr;
-            memcpy(&addr, additionalSection.currentPtr, sizeof(struct in_addr));
-            cout << domain << " " << ttl << " " << "IN " << "A " << inet_ntoa(addr) << endl;
-            add_to_translations(domain, inet_ntoa(addr));
-            break;
-        }
-        case 28:
-        { // AAAA record
-            char addr[INET6_ADDRSTRLEN];
-            inet_ntop(AF_INET6, additionalSection.currentPtr, addr, sizeof(addr));
-            cout << domain << " " << ttl << " " << "IN " << "AAAA " << addr << endl;
-            add_to_translations(domain, addr);
-            break;
-        }
-        case 33:
-        { // SRV record
-            uint16_t priority = ntohs(*(uint16_t *)additionalSection.currentPtr);
-            additionalSection.currentPtr += 2;
-            uint16_t weight = ntohs(*(uint16_t *)additionalSection.currentPtr);
-            additionalSection.currentPtr += 2;
-            uint16_t port = ntohs(*(uint16_t *)additionalSection.currentPtr);
-            additionalSection.currentPtr += 2;
-            string target = additionalSection.parse_domain(additionalSection.currentPtr, headerPtr);
-            cout << domain << " " << ttl << " " << "IN " << "SRV " << priority << " " << weight << " " << port << " " << target << endl;
-            break;
-        }
-        default:
-            cout << domain << " " << ttl << " " << "Unknown Type: " << type << endl;
-            break;
-        }
-
-        additionalSection.currentPtr += dataLen;
-        recordPtr = additionalSection.currentPtr;
+    case 28:
+    { // AAAA record
+        char addr[INET6_ADDRSTRLEN];
+        inet_ntop(AF_INET6, currentSection.currentPtr, addr, sizeof(addr));
+        cout << domain << " " << ttl << " " << "IN " << "AAAA " << addr << endl;
+        add_to_translations(domain, addr);
+        currentSection.currentPtr += dataLen;
+        break;
     }
-}
+    case 2:
+    { // NS record
+        string nsName = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+        cout << domain << " " << ttl << " " << "IN " << "NS " << nsName << endl;
+        add_to_domain_list(nsName);
+        break;
+    }
+    case 15:
+    { // MX record
+        uint16_t preference = ntohs(*(uint16_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 2;
+        string exchange = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+        if (exchange == "")
+            exchange = "<Root>";
+        cout << domain << " " << ttl << " " << "IN " << "MX " << preference << " " << exchange << endl;
+        break;
+    }
+    case 6:
+    { // SOA record
+        string mname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+        string rname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
 
-const u_char *DnsMonitor::print_soa_record(Section currentSection, const u_char *headerPtr, string domain, uint32_t ttl)
-{
-    string mname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
-    string rname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+        uint32_t serial = ntohl(*(uint32_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 4;
+        uint32_t refresh = ntohl(*(uint32_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 4;
+        uint32_t retry = ntohl(*(uint32_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 4;
+        uint32_t expire = ntohl(*(uint32_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 4;
+        uint32_t minimumTTL = ntohl(*(uint32_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 4;
 
-    uint32_t serial = ntohl(*(uint32_t *)currentSection.currentPtr);
-    currentSection.currentPtr += 4;
-    uint32_t refresh = ntohl(*(uint32_t *)currentSection.currentPtr);
-    currentSection.currentPtr += 4;
-    uint32_t retry = ntohl(*(uint32_t *)currentSection.currentPtr);
-    currentSection.currentPtr += 4;
-    uint32_t expire = ntohl(*(uint32_t *)currentSection.currentPtr);
-    currentSection.currentPtr += 4;
-    uint32_t minimumTTL = ntohl(*(uint32_t *)currentSection.currentPtr);
-    currentSection.currentPtr += 4;
-
-    // Vypisovanie záznamu v požadovanom formáte
-    cout << domain << " " << ttl << " IN SOA " << mname << " " << rname << " (" << endl;
-    cout << "    " << serial << " ; Serial" << endl;
-    cout << "    " << refresh << " ; Refresh" << endl;
-    cout << "    " << retry << " ; Retry" << endl;
-    cout << "    " << expire << " ; Expire" << endl;
-    cout << "    " << minimumTTL << " ; Minimum TTL" << endl;
-    cout << ")" << endl;
+        cout << domain << " " << ttl << " IN SOA " << mname << " " << rname << " (" << endl;
+        cout << "   " << serial << " ; Serial" << endl;
+        cout << "   " << refresh << " ; Refresh" << endl;
+        cout << "   " << retry << " ; Retry" << endl;
+        cout << "   " << expire << " ; Expire" << endl;
+        cout << "   " << minimumTTL << " ; Minimum TTL" << endl;
+        cout << ")" << endl;
+        break;
+    }
+    case 5:
+    { // CNAME record
+        string cname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+        cout << domain << " " << ttl << " " << "IN " << "CNAME " << cname << endl;
+        break;
+    }
+    case 33:
+    { // SRV record
+        uint16_t priority = ntohs(*(uint16_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 2;
+        uint16_t weight = ntohs(*(uint16_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 2;
+        uint16_t port = ntohs(*(uint16_t *)currentSection.currentPtr);
+        currentSection.currentPtr += 2;
+        string target = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+        cout << domain << " " << ttl << " " << "IN " << "SRV " << priority << " " << weight << " " << port << " " << target << endl;
+        break;
+    }
+    default:
+        break;
+    }
 
     return currentSection.currentPtr;
 }
@@ -482,58 +391,6 @@ void DnsMonitor::add_to_translations(string domain, string translation)
     if (!found)
         translations.push_back(domainTranslation);
 }
-
-// pair<string, int> DnsMonitor::parse_domain(const u_char *dnsPacket, const u_char *headerPtr)
-// {
-//     string domainName;
-//     int offset = 0;
-
-//     const u_char *currentPtr = dnsPacket;
-
-//     while (*currentPtr != 0)
-//     {
-//         if ((*currentPtr & 0xC0) == 0xC0)
-//         {
-//             currentPtr += 1;
-//             offset = *currentPtr;
-//             currentPtr = headerPtr + offset;
-//         }
-//         else
-//         {
-//             int labelLength = *currentPtr;
-//             currentPtr += 1;
-//             domainName.append((const char *)(currentPtr), labelLength);
-//             currentPtr += labelLength;
-//             domainName.append(".");
-//         }
-//     }
-
-//     if (domainName.back() == '.')
-//         domainName.pop_back();
-
-//     return {domainName, get_domain_length(dnsPacket)};
-// }
-
-// int DnsMonitor::get_domain_length(const u_char *dnsPacket)
-// {
-//     const u_char *currentPtr = dnsPacket;
-//     int labelLen;
-//     int len = 0;
-
-//     while (*currentPtr != 0)
-//     {
-//         if ((*currentPtr & 0xC0) == 0xC0)
-//             return len + 2;
-//         else
-//         {
-//             labelLen = *currentPtr;
-//             len += labelLen + 1;
-//             currentPtr += labelLen + 1;
-//         }
-//     }
-
-//     return len + 1;
-// }
 
 void DnsMonitor::print_dns_packet_raw(const u_char *packet, size_t length)
 {
