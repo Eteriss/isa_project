@@ -3,7 +3,7 @@ CXX = g++
 CPPFLAGS = -std=c++17 -Wall
 LDFLAGS = -lpcap
 
-SRC = main.cpp dns_monitor.cpp arg_parser.cpp
+SRC = main.cpp dns_monitor.cpp arg_parser.cpp section.cpp
 OBJ = $(SRC:.cpp=.o)
 
 $(TARGET): $(OBJ)
