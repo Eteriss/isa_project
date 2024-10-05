@@ -76,9 +76,7 @@ void DnsMonitor::process_packets(ArgParser parser)
     {
         ofstream file(parser.domainsfile);
         for (auto &domain : domainNames)
-        {
             file << domain << endl;
-        }
 
         file.close();
     }
@@ -87,9 +85,7 @@ void DnsMonitor::process_packets(ArgParser parser)
     {
         ofstream file(parser.translationsfile);
         for (auto &translation : translations)
-        {
             file << translation << endl;
-        }
 
         file.close();
     }
@@ -233,18 +229,12 @@ const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCoun
 
     for (int i = 0; i < qdCount; ++i)
     {
-        pair<string, int> domainPair = parse_domain(currentPtr, dnsPacket);
-        string domain = domainPair.first;
-        currentPtr += domainPair.second;
+        Section questionSection(currentPtr, dnsPacket, true);
+        uint16_t qtype = questionSection.type;
+        uint16_t qclass = questionSection.dnsClass;
+        string domain = questionSection.domain;
+        currentPtr = questionSection.currentPtr;
         add_to_domain_list(domain);
-
-        // QTYPE 2 bytes
-        uint16_t qtype = ntohs(*((uint16_t *)currentPtr));
-        currentPtr += 2;
-
-        // QCLASS 2 bytes
-        uint16_t qclass = ntohs(*((uint16_t *)currentPtr));
-        currentPtr += 2;
 
         // ignore unknown QTYPEs
         if (qTypeMap.find(qtype) == qTypeMap.end())
@@ -267,7 +257,7 @@ const u_char *DnsMonitor::print_dns_answer(const u_char *headerPtr, int ancount,
     const u_char *recordPtr = startOfAnswer;
     for (int i = 0; i < ancount; i++)
     {
-        Section answerSection(recordPtr, headerPtr);
+        Section answerSection(recordPtr, headerPtr, false);
         uint16_t type = answerSection.type;
         uint32_t ttl = answerSection.ttl;
         uint16_t dataLen = answerSection.dataLen;
@@ -296,7 +286,7 @@ const u_char *DnsMonitor::print_dns_answer(const u_char *headerPtr, int ancount,
         }
         case 2:
         { // NS record
-            string nsName = answerSection.parse_domain(answerSection.currentPtr, headerPtr).first;
+            string nsName = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
             cout << domain << " " << ttl << " " << "IN " << "NS " << nsName << endl;
             add_to_domain_list(nsName);
             break;
@@ -305,7 +295,7 @@ const u_char *DnsMonitor::print_dns_answer(const u_char *headerPtr, int ancount,
         { // MX record
             uint16_t preference = ntohs(*(uint16_t *)answerSection.currentPtr);
             answerSection.currentPtr += 2;
-            string exchange = answerSection.parse_domain(answerSection.currentPtr, headerPtr).first;
+            string exchange = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
             if (exchange == "")
                 exchange = "<Root>";
             cout << domain << " " << ttl << " " << "IN " << "MX " << preference << " " << exchange << endl;
@@ -318,7 +308,7 @@ const u_char *DnsMonitor::print_dns_answer(const u_char *headerPtr, int ancount,
         }
         case 5:
         { // CNAME record
-            string cname = answerSection.parse_domain(answerSection.currentPtr, headerPtr).first;
+            string cname = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
             cout << domain << " " << ttl << " " << "IN " << "CNAME " << cname << endl;
             break;
         }
@@ -330,7 +320,7 @@ const u_char *DnsMonitor::print_dns_answer(const u_char *headerPtr, int ancount,
             answerSection.currentPtr += 2;
             uint16_t port = ntohs(*(uint16_t *)answerSection.currentPtr);
             answerSection.currentPtr += 2;
-            string target = answerSection.parse_domain(answerSection.currentPtr, headerPtr).first;
+            string target = answerSection.parse_domain(answerSection.currentPtr, headerPtr);
             cout << domain << " " << ttl << " " << "IN " << "SRV " << priority << " " << weight << " " << port << " " << target << endl;
             break;
         }
@@ -350,7 +340,7 @@ const u_char *DnsMonitor::print_dns_authority(const u_char *headerPtr, int nscou
 
     for (int i = 0; i < nscount; i++)
     {
-        Section authSection(recordPtr, headerPtr);
+        Section authSection(recordPtr, headerPtr, false);
         uint16_t type = authSection.type;
         uint32_t ttl = authSection.ttl;
         string domain = authSection.domain;
@@ -360,7 +350,7 @@ const u_char *DnsMonitor::print_dns_authority(const u_char *headerPtr, int nscou
         {
         case 2:
         { // NS record
-            string nsName = authSection.parse_domain(authSection.currentPtr, headerPtr).first;
+            string nsName = authSection.parse_domain(authSection.currentPtr, headerPtr);
             cout << domain << " " << ttl << " " << "IN " << "NS " << nsName << endl;
             break;
         }
@@ -385,7 +375,7 @@ void DnsMonitor::print_dns_additional(const u_char *headerPtr, int arcount, cons
 
     for (int i = 0; i < arcount; i++)
     {
-        Section additionalSection(recordPtr, headerPtr);
+        Section additionalSection(recordPtr, headerPtr, false);
         uint16_t type = additionalSection.type;
         uint32_t ttl = additionalSection.ttl;
         uint16_t dataLen = additionalSection.dataLen;
@@ -418,7 +408,7 @@ void DnsMonitor::print_dns_additional(const u_char *headerPtr, int arcount, cons
             additionalSection.currentPtr += 2;
             uint16_t port = ntohs(*(uint16_t *)additionalSection.currentPtr);
             additionalSection.currentPtr += 2;
-            string target = additionalSection.parse_domain(additionalSection.currentPtr, headerPtr).first;
+            string target = additionalSection.parse_domain(additionalSection.currentPtr, headerPtr);
             cout << domain << " " << ttl << " " << "IN " << "SRV " << priority << " " << weight << " " << port << " " << target << endl;
             break;
         }
@@ -434,8 +424,8 @@ void DnsMonitor::print_dns_additional(const u_char *headerPtr, int arcount, cons
 
 const u_char *DnsMonitor::print_soa_record(Section currentSection, const u_char *headerPtr, string domain, uint32_t ttl)
 {
-    string mname = currentSection.parse_domain(currentSection.currentPtr, headerPtr).first;
-    string rname = currentSection.parse_domain(currentSection.currentPtr, headerPtr).first;
+    string mname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+    string rname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
 
     uint32_t serial = ntohl(*(uint32_t *)currentSection.currentPtr);
     currentSection.currentPtr += 4;
@@ -493,57 +483,57 @@ void DnsMonitor::add_to_translations(string domain, string translation)
         translations.push_back(domainTranslation);
 }
 
-pair<string, int> DnsMonitor::parse_domain(const u_char *dnsPacket, const u_char *headerPtr)
-{
-    string domainName;
-    int offset = 0;
+// pair<string, int> DnsMonitor::parse_domain(const u_char *dnsPacket, const u_char *headerPtr)
+// {
+//     string domainName;
+//     int offset = 0;
 
-    const u_char *currentPtr = dnsPacket;
+//     const u_char *currentPtr = dnsPacket;
 
-    while (*currentPtr != 0)
-    {
-        if ((*currentPtr & 0xC0) == 0xC0)
-        {
-            currentPtr += 1;
-            offset = *currentPtr;
-            currentPtr = headerPtr + offset;
-        }
-        else
-        {
-            int labelLength = *currentPtr;
-            currentPtr += 1;
-            domainName.append((const char *)(currentPtr), labelLength);
-            currentPtr += labelLength;
-            domainName.append(".");
-        }
-    }
+//     while (*currentPtr != 0)
+//     {
+//         if ((*currentPtr & 0xC0) == 0xC0)
+//         {
+//             currentPtr += 1;
+//             offset = *currentPtr;
+//             currentPtr = headerPtr + offset;
+//         }
+//         else
+//         {
+//             int labelLength = *currentPtr;
+//             currentPtr += 1;
+//             domainName.append((const char *)(currentPtr), labelLength);
+//             currentPtr += labelLength;
+//             domainName.append(".");
+//         }
+//     }
 
-    if (domainName.back() == '.')
-        domainName.pop_back();
+//     if (domainName.back() == '.')
+//         domainName.pop_back();
 
-    return {domainName, get_domain_length(dnsPacket)};
-}
+//     return {domainName, get_domain_length(dnsPacket)};
+// }
 
-int DnsMonitor::get_domain_length(const u_char *dnsPacket)
-{
-    const u_char *currentPtr = dnsPacket;
-    int labelLen;
-    int len = 0;
+// int DnsMonitor::get_domain_length(const u_char *dnsPacket)
+// {
+//     const u_char *currentPtr = dnsPacket;
+//     int labelLen;
+//     int len = 0;
 
-    while (*currentPtr != 0)
-    {
-        if ((*currentPtr & 0xC0) == 0xC0)
-            return len + 2;
-        else
-        {
-            labelLen = *currentPtr;
-            len += labelLen + 1;
-            currentPtr += labelLen + 1;
-        }
-    }
+//     while (*currentPtr != 0)
+//     {
+//         if ((*currentPtr & 0xC0) == 0xC0)
+//             return len + 2;
+//         else
+//         {
+//             labelLen = *currentPtr;
+//             len += labelLen + 1;
+//             currentPtr += labelLen + 1;
+//         }
+//     }
 
-    return len + 1;
-}
+//     return len + 1;
+// }
 
 void DnsMonitor::print_dns_packet_raw(const u_char *packet, size_t length)
 {

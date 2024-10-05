@@ -1,12 +1,10 @@
 #include "section.hpp"
 #include <arpa/inet.h>
 
-Section::Section(const u_char *startOfSection, const u_char *headerPtr)
+Section::Section(const u_char *startOfSection, const u_char *headerPtr, bool isQuestion)
 {
     currentPtr = startOfSection;
-
-    std::pair<std::string, int> domainPair = parse_domain(currentPtr, headerPtr);
-    domain = domainPair.first;
+    domain = parse_domain(currentPtr, headerPtr);
 
     type = ntohs(*(uint16_t *)currentPtr);
     currentPtr += 2;
@@ -14,14 +12,17 @@ Section::Section(const u_char *startOfSection, const u_char *headerPtr)
     dnsClass = ntohs(*(uint16_t *)currentPtr);
     currentPtr += 2;
 
-    ttl = ntohl(*(uint32_t *)currentPtr);
-    currentPtr += 4;
+    if (!isQuestion)
+    {
+        ttl = ntohl(*(uint32_t *)currentPtr);
+        currentPtr += 4;
 
-    dataLen = ntohs(*(uint16_t *)currentPtr);
-    currentPtr += 2;
+        dataLen = ntohs(*(uint16_t *)currentPtr);
+        currentPtr += 2;
+    }
 }
 
-std::pair<std::string, int> Section::parse_domain(const u_char *dnsPacket, const u_char *headerPtr)
+std::string Section::parse_domain(const u_char *dnsPacket, const u_char *headerPtr)
 {
     std::string domainName;
     int length = get_domain_length(dnsPacket);
@@ -52,7 +53,7 @@ std::pair<std::string, int> Section::parse_domain(const u_char *dnsPacket, const
         domainName.pop_back();
 
     Section::currentPtr += length;
-    return {domainName, length};
+    return domainName;
 }
 
 int Section::get_domain_length(const u_char *dnsPacket)

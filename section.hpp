@@ -9,7 +9,7 @@
 class Section
 {
 public:
-    Section(const u_char *dnsPacket, const u_char *headerPtr);
+    Section(const u_char *dnsPacket, const u_char *headerPtr, bool isQuestion);
 
     uint16_t type;
     uint16_t dnsClass;
@@ -18,7 +18,7 @@ public:
     std::string domain;
     const u_char *currentPtr;
 
-    std::pair<std::string, int> parse_domain(const u_char *dnsPacket, const u_char *headerPtr);
+    std::string parse_domain(const u_char *dnsPacket, const u_char *headerPtr);
 
 private:
     int get_domain_length(const u_char *dnsPacket);
