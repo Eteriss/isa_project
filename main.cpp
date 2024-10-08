@@ -1,3 +1,9 @@
+/**
+ * @file main.cpp
+ * @brief Main file for the DNS monitor program.
+ * @author Adam Pastierik
+ */
+
 #include "arg_parser.hpp"
 #include "dns_monitor.hpp"
 

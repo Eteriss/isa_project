@@ -1,3 +1,9 @@
+/**
+ * @file arg_parser.cpp
+ * @brief Implementation file for the argument parser class.
+ * @author Adam Pastierik
+ */
+
 #include "arg_parser.hpp"
 
 ArgParser::ArgParser(int argc, char *argv[])
@@ -8,30 +14,33 @@ ArgParser::ArgParser(int argc, char *argv[])
 void ArgParser::parse_args(int argc, char *argv[])
 {
     int opt;
+
+    // process command line options using getopt
     while ((opt = getopt(argc, argv, "i:p:vd:t:")) != -1)
     {
         switch (opt)
         {
         case 'i':
-            interface = optarg;
+            interface = optarg; // set the network interface
             break;
         case 'p':
-            pcapfile = optarg;
+            pcapfile = optarg; // set the PCAP file path
             break;
         case 'v':
-            verbose = true;
+            verbose = true; // enable verbose mode
             break;
         case 'd':
-            domainsfile = optarg;
+            domainsfile = optarg; // set the domains file path
             break;
         case 't':
-            translationsfile = optarg;
+            translationsfile = optarg; // set the translations file path
             break;
         default:
-            exit(1);
+            exit(1); // exit with error if an invalid option is provided
         }
     }
 
+    // ensure that either interface or pcapfile is provided, but not both
     if (interface.empty() && pcapfile.empty())
     {
         std::cerr << "Error: Either an interface (-i) or a pcap file (-p) must be provided.\n";

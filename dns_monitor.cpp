@@ -1,3 +1,9 @@
+/**
+ * @file dns_monitor.cpp
+ * @brief Implementation file for the DNS monitor class.
+ * @author Adam Pastierik
+ */
+
 #include <stdlib.h>
 #include <ctime>
 #include <netinet/ip.h>
@@ -70,8 +76,10 @@ void DnsMonitor::process_packets(ArgParser parser)
         exit(2);
     }
 
+    // start packet processing
     pcap_loop(handle, 0, DnsMonitor::get_ip_version, NULL);
 
+    // write domain names and translations to files
     if (!parser.domainsfile.empty())
     {
         ofstream file(parser.domainsfile);
@@ -110,6 +118,7 @@ void DnsMonitor::get_ip_version(u_char *args, const struct pcap_pkthdr *header, 
     char srcIp6[INET6_ADDRSTRLEN];
     char dstIp6[INET6_ADDRSTRLEN];
 
+    // determine IP version and call print function with appropriate arguments
     switch (ethType)
     {
     case ETHERTYPE_IP:
@@ -142,7 +151,7 @@ void DnsMonitor::get_ip_version(u_char *args, const struct pcap_pkthdr *header, 
 
 void DnsMonitor::print_dns_packet(const struct udphdr *udpHeader, const u_char *dnsPacket, const struct pcap_pkthdr *header, const char *srcIp, const char *dstIp)
 {
-    // timestamp
+    // get timestamp of packet
     time_t rawTime = header->ts.tv_sec;
     tm *timeInfo = localtime(&rawTime);
     char timeBuffer[80];
@@ -178,7 +187,7 @@ void DnsMonitor::print_dns_packet(const struct udphdr *udpHeader, const u_char *
         cout << "Z=" << ((flags & 0x0070) >> 4) << ", ";
         cout << "RCODE=" << (flags & 0x000F) << endl;
 
-        const u_char *nextSection;
+        const u_char *nextSection; // pointer to the next section in the DNS packet
 
         cout << endl
              << "[Question Section]" << endl;
@@ -219,7 +228,7 @@ void DnsMonitor::print_dns_packet(const struct udphdr *udpHeader, const u_char *
 
 const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCount)
 {
-    const u_char *currentPtr = dnsPacket;
+    const u_char *currentPtr = dnsPacket; // pointer to the current position in the DNS packet
 
     // mapping of QTYPE and QCLASS values to strings
     unordered_map<uint16_t, string> qTypeMap = {
@@ -236,12 +245,12 @@ const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCoun
         currentPtr = questionSection.currentPtr;
         add_to_domain_list(domain);
 
-        // ignore unknown QTYPEs
+        // ignore unknown query types
         if (qTypeMap.find(qtype) == qTypeMap.end())
             continue;
 
         string qTypeStr = qTypeMap[qtype];
-        string qClassStr = qClassMap.count(qclass) ? qClassMap[qclass] : to_string(qclass);
+        string qClassStr = qClassMap[qclass];
 
         // if (qtype == 1 || qtype == 28)
         //     add_to_translations
@@ -257,8 +266,8 @@ const u_char *DnsMonitor::print_section(const u_char *headerPtr, int recordCount
     const u_char *recordPtr = startOfSection;
     for (int i = 0; i < recordCount; i++)
     {
-        Section answerSection(recordPtr, headerPtr, false);
-        recordPtr = print_record(answerSection, headerPtr);
+        Section section(recordPtr, headerPtr, false);
+        recordPtr = print_record(section, headerPtr);
     }
 
     return recordPtr;
@@ -272,6 +281,7 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
     string domain = currentSection.domain;
     add_to_domain_list(domain);
 
+    // print corresponding record based on the type
     switch (type)
     {
     case 1:
@@ -361,7 +371,9 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
 
 void DnsMonitor::add_to_domain_list(string domain)
 {
+    domain.pop_back(); // remove trailing dot
     bool found = false;
+
     for (const auto &item : domainNames)
     {
         if (item == domain)
@@ -371,6 +383,7 @@ void DnsMonitor::add_to_domain_list(string domain)
         }
     }
 
+    // add domain to list if not already present
     if (!found)
         domainNames.push_back(domain);
 }
@@ -378,6 +391,7 @@ void DnsMonitor::add_to_domain_list(string domain)
 void DnsMonitor::add_to_translations(string domain, string translation)
 {
     bool found = false;
+    domain.pop_back();
     string domainTranslation = domain + " " + translation;
     for (const auto &item : translations)
     {
@@ -388,6 +402,7 @@ void DnsMonitor::add_to_translations(string domain, string translation)
         }
     }
 
+    // add domain with its translation to list if not already present
     if (!found)
         translations.push_back(domainTranslation);
 }

@@ -1,3 +1,9 @@
+/**
+ * @file section.cpp
+ * @brief Implementation file for the Section class.
+ * @author Adam Pastierik
+ */
+
 #include "section.hpp"
 #include <arpa/inet.h>
 
@@ -33,10 +39,10 @@ std::string Section::parse_domain(const u_char *dnsPacket, const u_char *headerP
         // check if the domain name is compressed
         if ((*currentPtr & 0xC0) == 0xC0)
         {
-            int offset = ((*currentPtr & 0x3F) << 8);
+            int offset = ((*currentPtr & 0x3F) << 8); // get first number after C in the pointer
             currentPtr += 1;
-            offset |= *currentPtr;
-            currentPtr = headerPtr + offset;
+            offset |= *currentPtr;           // add the next byte to the offset
+            currentPtr = headerPtr + offset; // move the pointer to the offset
         }
         else
         {
@@ -47,9 +53,6 @@ std::string Section::parse_domain(const u_char *dnsPacket, const u_char *headerP
             domainName.append(".");
         }
     }
-
-    if (domainName.back() == '.')
-        domainName.pop_back();
 
     Section::currentPtr += length;
     return domainName;
@@ -63,21 +66,14 @@ int Section::get_domain_length(const u_char *dnsPacket)
 
     while (*currentPtr != 0)
     {
+        // check if the domain name is compressed
         if ((*currentPtr & 0xC0) == 0xC0)
-        {
-            len += 2;
-            break;
-        }
-        else
-        {
-            labelLen = *currentPtr;
-            len += labelLen + 1;
-            currentPtr += labelLen + 1;
-        }
+            return len + 2;
+
+        labelLen = *currentPtr;
+        len += labelLen + 1;
+        currentPtr += labelLen + 1;
     }
 
-    if ((*currentPtr & 0xC0) != 0xC0)
-        len += 1;
-
-    return len;
+    return len + 1;
 }
