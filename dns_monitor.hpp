@@ -17,6 +17,7 @@
 #include <iostream>
 #include <pcap.h>
 #include <list>
+#include <sys/types.h>
 #include "section.hpp"
 #include "arg_parser.hpp"
 

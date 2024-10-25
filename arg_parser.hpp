@@ -14,6 +14,7 @@
 #include <string>
 #include <unistd.h>
 #include <iostream>
+#include <sys/types.h>
 
 /**
  * @brief Argument parser class for processing command line arguments.
