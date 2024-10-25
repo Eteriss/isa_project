@@ -2,6 +2,7 @@
  * @file dns_monitor.hpp
  * @brief Header file for the DNS monitor class.
  * @author Adam Pastierik
+ * login: xpasti00
  *
  * This file contains the declaration of the DNS monitor class.
  * The class is used to process DNS packets from a network interface or PCAP file.
@@ -42,6 +43,8 @@ public:
      * @brief Constructor for the DnsMonitor class.
      */
     DnsMonitor();
+    static pcap_t *handle;
+    static struct bpf_program fp;
 
     /**
      * @brief Processes packets from a network interface or PCAP file.
@@ -60,6 +63,8 @@ public:
      * @param dstIp The destination IP address.
      */
     static void print_dns_packet(const struct udphdr *udpHeader, const u_char *dnsPacket, const struct pcap_pkthdr *header, const char *srcIp, const char *dstIp);
+
+    static void handle_interrupt(int signum);
 
 private:
     char errBuf[PCAP_ERRBUF_SIZE]; // Buffer for storing error messages from pcap functions.

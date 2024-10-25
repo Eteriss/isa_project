@@ -2,6 +2,7 @@
  * @file dns_monitor.cpp
  * @brief Implementation file for the DNS monitor class.
  * @author Adam Pastierik
+ * login: xpasti00
  */
 
 #include <stdlib.h>
@@ -22,15 +23,14 @@ using namespace std;
 list<string> DnsMonitor::domainNames;
 list<string> DnsMonitor::translations;
 bool DnsMonitor::verboseFlag = false;
+pcap_t *DnsMonitor::handle = nullptr;
+struct bpf_program DnsMonitor::fp;
 
 DnsMonitor::DnsMonitor() {}
 
 void DnsMonitor::process_packets(ArgParser parser)
 {
-    pcap_t *handle;
-
     // dns filter
-    struct bpf_program fp;
     char filterExp[] = "udp port 53";
     bpf_u_int32 net;
 
@@ -51,6 +51,7 @@ void DnsMonitor::process_packets(ArgParser parser)
         {
             fprintf(stderr, "Can't get netmask for device %s\n", interface);
             net = 0;
+            exit(1);
         }
     }
     else
@@ -141,8 +142,6 @@ void DnsMonitor::get_ip_version(u_char *args, const struct pcap_pkthdr *header, 
         dnsPacket = packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr) + sizeof(struct udphdr);
 
         print_dns_packet(udpHeader, dnsPacket, header, srcIp6, dstIp6);
-        break;
-    case ETHERTYPE_ARP:
         break;
     default:
         cout << "Unknown packet" << endl;
@@ -264,6 +263,7 @@ const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCoun
 const u_char *DnsMonitor::print_section(const u_char *headerPtr, int recordCount, const u_char *startOfSection)
 {
     const u_char *recordPtr = startOfSection;
+
     for (int i = 0; i < recordCount; i++)
     {
         Section section(recordPtr, headerPtr, false);
@@ -363,7 +363,7 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         break;
     }
     default:
-        break;
+        currentSection.currentPtr += dataLen;
     }
 
     return currentSection.currentPtr;
@@ -405,6 +405,17 @@ void DnsMonitor::add_to_translations(string domain, string translation)
     // add domain with its translation to list if not already present
     if (!found)
         translations.push_back(domainTranslation);
+}
+
+void DnsMonitor::handle_interrupt(int signum)
+{
+    if (handle != nullptr)
+    {
+        pcap_breakloop(handle);
+        pcap_freecode(&fp);
+        pcap_close(handle);
+    }
+    exit(0);
 }
 
 void DnsMonitor::print_dns_packet_raw(const u_char *packet, size_t length)

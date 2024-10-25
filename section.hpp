@@ -2,6 +2,7 @@
  * @file section.hpp
  * @brief Header file for the Section class.
  * @author Adam Pastierik
+ * login: xpasti00
  *
  * This file contains the declaration of the Section class.
  * The class is used to represent a section of a DNS packet.

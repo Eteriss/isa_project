@@ -2,6 +2,7 @@
  * @file arg_parser.hpp
  * @brief Header file for the argument parser class.
  * @author Adam Pastierik
+ * login: xpasti00
  *
  * This file contains the declaration of the argument parser class.
  * The class is used to parse command line arguments and set the appropriate fields.

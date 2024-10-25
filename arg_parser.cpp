@@ -2,6 +2,7 @@
  * @file arg_parser.cpp
  * @brief Implementation file for the argument parser class.
  * @author Adam Pastierik
+ * login: xpasti00
  */
 
 #include "arg_parser.hpp"

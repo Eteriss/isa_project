@@ -2,10 +2,12 @@
  * @file main.cpp
  * @brief Main file for the DNS monitor program.
  * @author Adam Pastierik
+ * login: xpasti00
  */
 
 #include "arg_parser.hpp"
 #include "dns_monitor.hpp"
+#include <csignal>
 
 bool verboseFlag = false;
 
@@ -36,6 +38,10 @@ int main(int argc, char *argv[])
     // get_all_devices();
     ArgParser parser(argc, argv);
     DnsMonitor monitor;
+
+    signal(SIGINT, DnsMonitor::handle_interrupt);
+    signal(SIGQUIT, DnsMonitor::handle_interrupt);
+    signal(SIGTERM, DnsMonitor::handle_interrupt);
 
     monitor.process_packets(parser);
 

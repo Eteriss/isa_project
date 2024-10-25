@@ -2,6 +2,7 @@
  * @file section.cpp
  * @brief Implementation file for the Section class.
  * @author Adam Pastierik
+ * login: xpasti00
  */
 
 #include "section.hpp"
