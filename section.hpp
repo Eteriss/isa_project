@@ -16,7 +16,6 @@
 #include <unistd.h>
 #include <iostream>
 #include <utility>
-#include <sys/types.h>
 
 /**
  * @brief Class representing a DNS section.

@@ -6,12 +6,15 @@
  */
 
 #include <stdlib.h>
-#include <ctime>
+#include <time.h>
+#include <sys/types.h>  // Add this for type definitions
+#include <sys/socket.h> // Add this for socket definitions
+#include <netinet/in.h> // Use this instead of <netinet/ip.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/udp.h>
 #include <arpa/inet.h>
-#include <netinet/if_ether.h>
+#include <net/ethernet.h> // Use this instead of <netinet/if_ether.h>
 #include <unordered_map>
 #include <string.h>
 #include <fstream>

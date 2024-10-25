@@ -6,7 +6,6 @@
  */
 
 #include <arpa/inet.h>
-#include <sys/types.h>
 #include "section.hpp"
 
 Section::Section(const u_char *startOfSection, const u_char *headerPtr, bool isQuestion)
