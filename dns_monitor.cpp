@@ -7,14 +7,14 @@
 
 #include <stdlib.h>
 #include <time.h>
-#include <sys/types.h>  // Add this for type definitions
-#include <sys/socket.h> // Add this for socket definitions
-#include <netinet/in.h> // Use this instead of <netinet/ip.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/udp.h>
 #include <arpa/inet.h>
-#include <net/ethernet.h> // Use this instead of <netinet/if_ether.h>
+#include <net/ethernet.h>
 #include <unordered_map>
 #include <string.h>
 #include <fstream>
@@ -108,8 +108,25 @@ void DnsMonitor::process_packets(ArgParser parser)
 
 void DnsMonitor::get_ip_version(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    const struct ether_header *ethHeader = (struct ether_header *)packet;
-    uint16_t ethType = ntohs(ethHeader->ether_type);
+    const struct ether_header *ethHeader;
+    const struct sll_header *sllHeader;
+    int headerLength = 0;
+    uint16_t ethType;
+
+    int dltType = pcap_datalink(handle);
+
+    if (dltType == DLT_LINUX_SLL)
+    {
+        headerLength = 16;
+        sllHeader = reinterpret_cast<const struct sll_header *>(packet);
+        ethType = ntohs(sllHeader->sll_proto);
+    }
+    else if (dltType == DLT_EN10MB)
+    {
+        headerLength = 14;
+        ethHeader = reinterpret_cast<const struct ether_header *>(packet);
+        ethType = ntohs(ethHeader->ether_type);
+    }
 
     const struct ip *ipHeader;
     const struct ip6_hdr *ip6Header;
@@ -126,23 +143,23 @@ void DnsMonitor::get_ip_version(u_char *args, const struct pcap_pkthdr *header, 
     switch (ethType)
     {
     case ETHERTYPE_IP:
-        ipHeader = (struct ip *)(packet + sizeof(struct ether_header));
+        ipHeader = (struct ip *)(packet + headerLength);
         srcIp4 = inet_ntoa(ipHeader->ip_src);
         dstIp4 = inet_ntoa(ipHeader->ip_dst);
 
         udpHeader = (struct udphdr *)(packet + sizeof(struct ether_header) + sizeof(struct ip));
-        dnsPacket = packet + sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
+        dnsPacket = packet + headerLength + sizeof(struct ip) + sizeof(struct udphdr);
 
         print_dns_packet(udpHeader, dnsPacket, header, srcIp4.c_str(), dstIp4.c_str());
         break;
     case ETHERTYPE_IPV6:
-        ip6Header = (struct ip6_hdr *)(packet + sizeof(struct ether_header));
+        ip6Header = (struct ip6_hdr *)(packet + headerLength);
 
         inet_ntop(AF_INET6, &(ip6Header->ip6_src), srcIp6, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, &(ip6Header->ip6_dst), dstIp6, INET6_ADDRSTRLEN);
 
         udpHeader = (struct udphdr *)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
-        dnsPacket = packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr) + sizeof(struct udphdr);
+        dnsPacket = packet + headerLength + sizeof(struct ip6_hdr) + sizeof(struct udphdr);
 
         print_dns_packet(udpHeader, dnsPacket, header, srcIp6, dstIp6);
         break;
@@ -231,7 +248,6 @@ void DnsMonitor::print_dns_packet(const struct udphdr *udpHeader, const u_char *
 const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCount)
 {
     const u_char *currentPtr = dnsPacket; // pointer to the current position in the DNS packet
-
     // mapping of QTYPE and QCLASS values to strings
     unordered_map<uint16_t, string> qTypeMap = {
         {1, "A"}, {28, "AAAA"}, {5, "CNAME"}, {15, "MX"}, {2, "NS"}, {6, "SOA"}, {33, "SRV"}};

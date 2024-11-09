@@ -1,4 +1,8 @@
-TARGET = dns_monitor
+# File: Makefile
+# Author: Adam Pastierik
+# Login: xpasti00
+
+TARGET = dns-monitor
 CXX = g++
 CPPFLAGS = -std=c++17 -Wall
 LDFLAGS = -lpcap

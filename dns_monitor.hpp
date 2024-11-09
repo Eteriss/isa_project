@@ -34,6 +34,18 @@ struct dns_header
 };
 
 /**
+ * @brief Struct representing the Linux cooked capture header.
+ */
+struct sll_header
+{
+    uint16_t sll_pkttype; // Packet type.
+    uint16_t sll_hwtype;  // Hardware type.
+    uint16_t sll_hwlen;   // Hardware address length.
+    uint16_t sll_proto;   // Protocol.
+    uint8_t sll_addr[8];  // Hardware address.
+};
+
+/**
  * @brief Class for monitoring DNS packets.
  */
 class DnsMonitor
@@ -64,6 +76,11 @@ public:
      */
     static void print_dns_packet(const struct udphdr *udpHeader, const u_char *dnsPacket, const struct pcap_pkthdr *header, const char *srcIp, const char *dstIp);
 
+    /**
+     * @brief Terminates the program when an interrupt signal is received.
+     *
+     * @param signum Signal number.
+     */
     static void handle_interrupt(int signum);
 
 private:
@@ -72,6 +89,8 @@ private:
     static bool verboseFlag;                    // Flag to determine if verbose output is enabled.
     static std::list<std::string> domainNames;  // List of domain names found in DNS packets.
     static std::list<std::string> translations; // List of domain nameand their translations (A/AAAA records).
+
+    static void check_linux_cooked_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
 
     /**
      * @brief Determines the IP version of the packet.
