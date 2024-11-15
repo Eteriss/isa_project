@@ -443,21 +443,3 @@ void DnsMonitor::handle_interrupt(int signum)
     }
     exit(0);
 }
-
-void DnsMonitor::print_dns_packet_raw(const u_char *packet, size_t length)
-{
-    std::cout << "DNS Packet (Hex):" << std::endl;
-    for (size_t i = 0; i < length; ++i)
-    {
-        // Vypíše každý bajt ako dvojciferné hexa číslo
-        printf("%02x ", packet[i]);
-
-        // Pre lepší prehľad vloží zalomenie riadku každých 16 bajtov
-        if ((i + 1) % 16 == 0)
-            std::cout << std::endl;
-    }
-
-    // Ak posledný riadok neobsahoval presne 16 bajtov, ukonči riadok
-    if (length % 16 != 0)
-        std::cout << std::endl;
-}
