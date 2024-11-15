@@ -261,17 +261,15 @@ const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCoun
         uint16_t qclass = questionSection.dnsClass;
         string domain = questionSection.domain;
         currentPtr = questionSection.currentPtr;
-        add_to_domain_list(domain);
 
         // ignore unknown query types
-        if (qTypeMap.find(qtype) == qTypeMap.end())
+        if (qTypeMap.find(qtype) == qTypeMap.end() || qClassMap.find(qclass) == qClassMap.end())
             continue;
+
+        add_to_domain_list(domain);
 
         string qTypeStr = qTypeMap[qtype];
         string qClassStr = qClassMap[qclass];
-
-        // if (qtype == 1 || qtype == 28)
-        //     add_to_translations
 
         cout << domain << " " << qClassStr << " " << qTypeStr << endl;
     }
@@ -298,7 +296,6 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
     uint32_t ttl = currentSection.ttl;
     uint16_t dataLen = currentSection.dataLen;
     string domain = currentSection.domain;
-    add_to_domain_list(domain);
 
     // print corresponding record based on the type
     switch (type)
@@ -308,6 +305,7 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         struct in_addr addr;
         memcpy(&addr, currentSection.currentPtr, sizeof(struct in_addr));
         cout << domain << " " << ttl << " " << "IN " << "A " << inet_ntoa(addr) << endl;
+        add_to_domain_list(domain);
         add_to_translations(domain, inet_ntoa(addr));
         currentSection.currentPtr += dataLen;
         break;
@@ -317,6 +315,7 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         char addr[INET6_ADDRSTRLEN];
         inet_ntop(AF_INET6, currentSection.currentPtr, addr, sizeof(addr));
         cout << domain << " " << ttl << " " << "IN " << "AAAA " << addr << endl;
+        add_to_domain_list(domain);
         add_to_translations(domain, addr);
         currentSection.currentPtr += dataLen;
         break;
@@ -325,6 +324,7 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
     { // NS record
         string nsName = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         cout << domain << " " << ttl << " " << "IN " << "NS " << nsName << endl;
+        add_to_domain_list(domain);
         add_to_domain_list(nsName);
         break;
     }
@@ -336,12 +336,15 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         if (exchange == "")
             exchange = "<Root>";
         cout << domain << " " << ttl << " " << "IN " << "MX " << preference << " " << exchange << endl;
+        add_to_domain_list(domain);
         break;
     }
     case 6:
     { // SOA record
         string mname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         string rname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
+        add_to_domain_list(domain);
+        add_to_domain_list(mname);
 
         uint32_t serial = ntohl(*(uint32_t *)currentSection.currentPtr);
         currentSection.currentPtr += 4;
@@ -367,6 +370,8 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
     { // CNAME record
         string cname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         cout << domain << " " << ttl << " " << "IN " << "CNAME " << cname << endl;
+        add_to_domain_list(domain);
+        add_to_domain_list(cname);
         break;
     }
     case 33:
@@ -379,6 +384,8 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         currentSection.currentPtr += 2;
         string target = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         cout << domain << " " << ttl << " " << "IN " << "SRV " << priority << " " << weight << " " << port << " " << target << endl;
+        add_to_domain_list(domain);
+        add_to_domain_list(target);
         break;
     }
     default:
