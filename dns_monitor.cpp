@@ -23,8 +23,8 @@
 
 using namespace std;
 
-list<string> DnsMonitor::domainNames;
-list<string> DnsMonitor::translations;
+string DnsMonitor::domainNamesFile;
+string DnsMonitor::translationsFile;
 bool DnsMonitor::verboseFlag = false;
 pcap_t *DnsMonitor::handle = nullptr;
 struct bpf_program DnsMonitor::fp;
@@ -38,6 +38,8 @@ void DnsMonitor::process_packets(ArgParser parser)
     bpf_u_int32 net;
 
     verboseFlag = parser.verbose;
+    domainNamesFile = parser.domainsfile;
+    translationsFile = parser.translationsfile;
 
     // if interface is set, open live capture, otherwise open pcap file
     if (!parser.interface.empty())
@@ -82,25 +84,6 @@ void DnsMonitor::process_packets(ArgParser parser)
 
     // start packet processing
     pcap_loop(handle, 0, DnsMonitor::get_ip_version, NULL);
-
-    // write domain names and translations to files
-    if (!parser.domainsfile.empty())
-    {
-        ofstream file(parser.domainsfile);
-        for (auto &domain : domainNames)
-            file << domain << endl;
-
-        file.close();
-    }
-
-    if (!parser.translationsfile.empty())
-    {
-        ofstream file(parser.translationsfile);
-        for (auto &translation : translations)
-            file << translation << endl;
-
-        file.close();
-    }
 
     pcap_freecode(&fp);
     pcap_close(handle);
@@ -164,7 +147,7 @@ void DnsMonitor::get_ip_version(u_char *args, const struct pcap_pkthdr *header, 
         print_dns_packet(udpHeader, dnsPacket, header, srcIp6, dstIp6);
         break;
     default:
-        cout << "Unknown packet" << endl;
+        break;
     }
 }
 
@@ -266,7 +249,7 @@ const u_char *DnsMonitor::print_dns_question(const u_char *dnsPacket, int qdCoun
         if (qTypeMap.find(qtype) == qTypeMap.end() || qClassMap.find(qclass) == qClassMap.end())
             continue;
 
-        add_to_domain_list(domain);
+        add_to_domains(domain);
 
         string qTypeStr = qTypeMap[qtype];
         string qClassStr = qClassMap[qclass];
@@ -305,7 +288,7 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         struct in_addr addr;
         memcpy(&addr, currentSection.currentPtr, sizeof(struct in_addr));
         cout << domain << " " << ttl << " " << "IN " << "A " << inet_ntoa(addr) << endl;
-        add_to_domain_list(domain);
+        add_to_domains(domain);
         add_to_translations(domain, inet_ntoa(addr));
         currentSection.currentPtr += dataLen;
         break;
@@ -315,7 +298,7 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         char addr[INET6_ADDRSTRLEN];
         inet_ntop(AF_INET6, currentSection.currentPtr, addr, sizeof(addr));
         cout << domain << " " << ttl << " " << "IN " << "AAAA " << addr << endl;
-        add_to_domain_list(domain);
+        add_to_domains(domain);
         add_to_translations(domain, addr);
         currentSection.currentPtr += dataLen;
         break;
@@ -324,8 +307,8 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
     { // NS record
         string nsName = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         cout << domain << " " << ttl << " " << "IN " << "NS " << nsName << endl;
-        add_to_domain_list(domain);
-        add_to_domain_list(nsName);
+        add_to_domains(domain);
+        add_to_domains(nsName);
         break;
     }
     case 15:
@@ -336,15 +319,15 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         if (exchange == "")
             exchange = "<Root>";
         cout << domain << " " << ttl << " " << "IN " << "MX " << preference << " " << exchange << endl;
-        add_to_domain_list(domain);
+        add_to_domains(domain);
         break;
     }
     case 6:
     { // SOA record
         string mname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         string rname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
-        add_to_domain_list(domain);
-        add_to_domain_list(mname);
+        add_to_domains(domain);
+        add_to_domains(mname);
 
         uint32_t serial = ntohl(*(uint32_t *)currentSection.currentPtr);
         currentSection.currentPtr += 4;
@@ -370,8 +353,8 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
     { // CNAME record
         string cname = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         cout << domain << " " << ttl << " " << "IN " << "CNAME " << cname << endl;
-        add_to_domain_list(domain);
-        add_to_domain_list(cname);
+        add_to_domains(domain);
+        add_to_domains(cname);
         break;
     }
     case 33:
@@ -384,8 +367,8 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
         currentSection.currentPtr += 2;
         string target = currentSection.parse_domain(currentSection.currentPtr, headerPtr);
         cout << domain << " " << ttl << " " << "IN " << "SRV " << priority << " " << weight << " " << port << " " << target << endl;
-        add_to_domain_list(domain);
-        add_to_domain_list(target);
+        add_to_domains(domain);
+        add_to_domains(target);
         break;
     }
     default:
@@ -395,42 +378,78 @@ const u_char *DnsMonitor::print_record(Section currentSection, const u_char *hea
     return currentSection.currentPtr;
 }
 
-void DnsMonitor::add_to_domain_list(string domain)
+void DnsMonitor::add_to_domains(string domain)
 {
-    domain.pop_back(); // remove trailing dot
-    bool found = false;
+    if (domainNamesFile.empty())
+        return;
 
-    for (const auto &item : domainNames)
+    domain.pop_back(); // remove trailing dot
+
+    // open the file in append mode
+    ofstream domainFile(domainNamesFile, ios::app);
+
+    if (!domainFile.is_open())
     {
-        if (item == domain)
+        cerr << "Error: Could not open " << domainNamesFile << " for writing." << endl;
+        exit(3);
+    }
+
+    // check if the domain already exists in the file
+    ifstream checkFile(domainNamesFile);
+    string line;
+    bool found = false;
+    while (getline(checkFile, line))
+    {
+        if (line == domain)
         {
             found = true;
             break;
         }
     }
+    checkFile.close();
 
-    // add domain to list if not already present
+    // if not found, write to file
     if (!found)
-        domainNames.push_back(domain);
+        domainFile << domain << endl;
+
+    domainFile.close();
 }
 
 void DnsMonitor::add_to_translations(string domain, string translation)
 {
-    bool found = false;
-    domain.pop_back();
+    if (translationsFile.empty())
+        return;
+
+    domain.pop_back(); // remove trailing dot
     string domainTranslation = domain + " " + translation;
-    for (const auto &item : translations)
+
+    // open the file in append mode for writing and in read mode for checking duplicates
+    ofstream translationFile(translationsFile, ios::app);
+    if (!translationFile.is_open())
     {
-        if (item == domainTranslation)
+        cerr << "Error: Could not open " << translationsFile << " for writing." << endl;
+        exit(3);
+    }
+
+    // check if the translation already exists in the file
+    ifstream checkFile(translationsFile);
+    string line;
+    bool found = false;
+    while (getline(checkFile, line))
+    {
+        if (line == domainTranslation)
         {
             found = true;
             break;
         }
     }
+    checkFile.close();
 
-    // add domain with its translation to list if not already present
+    // if not found, write to file
     if (!found)
-        translations.push_back(domainTranslation);
+        translationFile << domainTranslation << endl;
+
+    translationFile.close();
 }
 
 void DnsMonitor::handle_interrupt(int signum)

@@ -86,9 +86,9 @@ public:
 private:
     char errBuf[PCAP_ERRBUF_SIZE]; // Buffer for storing error messages from pcap functions.
 
-    static bool verboseFlag;                    // Flag to determine if verbose output is enabled.
-    static std::list<std::string> domainNames;  // List of domain names found in DNS packets.
-    static std::list<std::string> translations; // List of domain nameand their translations (A/AAAA records).
+    static bool verboseFlag;             // Flag to determine if verbose output is enabled.
+    static std::string domainNamesFile;  // File containing domain names
+    static std::string translationsFile; // File containing domain names and their translations
 
     static void check_linux_cooked_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
 
@@ -102,14 +102,14 @@ private:
     static void get_ip_version(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
 
     /**
-     * @brief Adds a domain to the list of domains if not already present.
+     * @brief If the file for domain names is specified, adds the domain name to the file if it is not already present.
      *
      * @param domain The domain name to add.
      */
-    static void add_to_domain_list(std::string domain);
+    static void add_to_domains(std::string domain);
 
     /**
-     * @brief Adds a domain name with its corresponding translation (IP address) to the list.
+     * @brief If the file for domain translations is specified, adds the domain name and its translation to the file if it is not already present.
      *
      * @param domain The domain name.
      * @param translation The translation for the domain.
@@ -143,14 +143,6 @@ private:
      * @return Pointer to the next record or section in the packet.
      */
     static const u_char *print_record(Section currentSection, const u_char *headerPtr);
-
-    /**
-     * @brief Prints the raw DNS packet for debugging purposes.
-     *
-     * @param packet Pointer to the DNS packet.
-     * @param length Length of the packet.
-     */
-    static void print_dns_packet_raw(const u_char *packet, size_t length);
 };
 
 #endif
